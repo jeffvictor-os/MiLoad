@@ -7,6 +7,7 @@
 ToDo
     v0.06: Read user input from file
     v0.07: Convert threading to multi-processing
+    v0.20: Simulate user typing
 
     Author: Jeff Victor
 '''
