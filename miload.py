@@ -4,9 +4,10 @@
     v0.03: Store resulting metadata in pandas dataframe for later analysis. Single-core.
     v0.04: Display average and SD of times
     v0.05: Add command-line args: num_threads
-ToDo
     v0.06: Read user input from file
-    v0.07: Convert threading to multi-processing
+    v0.07: Isolate number of threads from number of URLs
+ToDo
+    v0.10: Convert threading to multi-processing
     v0.20: Simulate user typing
 
     Author: Jeff Victor
@@ -15,10 +16,13 @@ import argparse
 import pandas as pd
 import random
 import requests
+import sys
 import threading
 import time
 
-urls = [
+DEBUG=False
+
+default_urls = [
     'https://address.mivoter.org/index.php?num=1&street=Main St',
     'https://address.mivoter.org/index.php?num=8000&street=anchor bay dr'
     ]
@@ -29,21 +33,56 @@ def issue_request(url, result, i):
     response = requests.get(url)
     end      = time.time()
     elapsed  = f'{end-start:0.2f}'
+    # Store data for later analysis.
     result['start'] = start
     result['end']   = end
     result['url']   = url[38:]
     result['ret_code'] = response
     result['elapsed']    = response.elapsed.total_seconds()
+    if DEBUG:
+        print(f'{url}: Found {response.json()["count"]} matches:',
+              f'{response.json()["rows"][0]["low"]}',
+              f'{response.json()["rows"][0]["high"]}',
+              f'{response.json()["rows"][0]["street"]}'
+)
 
+def addr_to_url(address):
+    num = ''
+    prefix = 'https://address.mivoter.org/index.php?'
+    address = address.strip()
+    addr_list = address.split()
+    if addr_list[0].isdigit():
+        num = 'num=' + addr_list.pop(0) + '&'
+    url = f'{prefix}{num}street={' '.join(addr_list)}'
+    return url
 
-def main(num_threads):
+def main(num_threads, inputfile):
+    ''' main: retrieve optional address list, create threads, run all '''
+    # Get addresses
+    if inputfile is None:
+        urls = default_urls
+    else:
+        try:
+            with open(inputfile, 'r') as file:
+                lines = file.readlines()
+#               lines_stripped = [line.strip() for line in lines]
+                urls = [addr_to_url(line) for line in lines]
+
+        except FileNotFoundError:
+            print(f'Error: The file "{inputfile}" was not found.')
+            sys.exit(1)
+        except Exception as e:
+            print(f'An error occurred: {e}')
+            sys.exit(1)
+
     results = []
+    # Create one empty dict for each thread
     for r in range(num_threads):
         results.append({})
     threads = []
 
     for i in range(int(num_threads)):
-        url = urls[random.randint(0, 1)]
+        url = urls[random.randint(0, len(urls)-1)]
 
         t = threading.Thread(target=issue_request, args=(url, results[i], i))
         threads.append(t)
@@ -71,8 +110,9 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="A sample script demonstrating argparse.")
     parser.add_argument('-t', '--threads', type=int, default=10, help="Number of simultaneous threads")
+    parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
     args = parser.parse_args()
 
-    main(args.threads)
+    main(args.threads, args.inputfile)
 
 
