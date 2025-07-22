@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 
-DEBUG=True
+DEBUG=False
 
 default_urls = [
     'https://address.mivoter.org/index.php?num=1&street=Main St',
@@ -62,13 +62,19 @@ def addr_to_url(address):
     url = f'{prefix}{num}street={' '.join(addr_list)}'
     return url
 
-def main(num_threads, inputfile):
+def addr_range_to_url(row):
+    prefix = 'https://address.mivoter.org/index.php?'
+    street_num = random.randint(row['low'], row['high'])
+    url = f'{prefix}num={street_num}&street={row["street"]}'
+    return url
+
+def main(num_threads, inputfile, rangefile):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
-    if inputfile is None:
+    if inputfile is None and rangefile is None:
         urls = default_urls
-    else:
+    elif inputfile is not None:
         try:
             with open(inputfile, 'r') as file:
                 lines = file.readlines()
@@ -80,7 +86,12 @@ def main(num_threads, inputfile):
         except Exception as e:
             print(f'An error occurred: {e}')
             sys.exit(1)
-    print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
+    else:
+        range_df = pd.read_csv(rangefile)
+        urls = range_df.apply(addr_range_to_url, axis=1).to_list()
+
+    if DEBUG:
+        print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
 
     mkthreads_start = time.time()
     results = []
@@ -94,7 +105,8 @@ def main(num_threads, inputfile):
 
         t = threading.Thread(target=issue_request, args=(url, results[i], i))
         threads.append(t)
-    print(f'Creating {num_threads} threads took {time.time()-mkthreads_start:0.6f} seconds.')
+    if DEBUG:
+        print(f'Creating {num_threads} threads took {time.time()-mkthreads_start:0.6f} seconds.')
 
     all_start = time.time()
     for i in range(len(threads)):
@@ -120,8 +132,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A sample script demonstrating argparse.")
     parser.add_argument('-t', '--threads', type=int, default=10, help="Number of simultaneous threads")
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
+    parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
     args = parser.parse_args()
 
-    main(args.threads, args.inputfile)
+    main(args.threads, args.inputfile, args.rangefile)
 
 
