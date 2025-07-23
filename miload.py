@@ -7,9 +7,10 @@
     v0.06: Read user input from file
     v0.07: Isolate number of threads from number of URLs
     v0.08: Improve diagnostics
-ToDo
     v0.09: Use input addresses, with street number low and high values, to randomize input.
     v0.10: Issue some requests without street numbers
+ToDo
+    v0.11: Fix street number selection: odd, even, both
     v0.12: Issue incorrect addresses (typos, wrong street numbers)
     v0.13: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
@@ -38,13 +39,14 @@ def issue_request(url, result, i):
     start    = time.time()
     response = requests.get(url)
     end      = time.time()
-    elapsed  = f'{end-start:0.2f}'
     # Store data for later analysis.
     result['start'] = start
     result['end']   = end
     result['url']   = url[38:]
     result['ret_code'] = response
     result['elapsed']    = response.elapsed.total_seconds()
+    resp_json = response.json()
+    result['num_matches'] = len(resp_json['rows'])
     if DEBUG:
         end_short = floor(end / 1000) * 1000
         print(f'{end-end_short:0.4f} : {url[38:]}: Found {response.json()["count"]} matches:',
@@ -64,8 +66,12 @@ def addr_to_url(address):
 
 def addr_range_to_url(row):
     prefix = 'https://address.mivoter.org/index.php?'
-    street_num = random.randint(row['low'], row['high'])
-    url = f'{prefix}num={street_num}&street={row["street"]}'
+    if random.randint(1,10) == 1:
+        # Issue request without a street number.
+        url = f'{prefix}street={row["street"]}'
+    else:
+        street_num = random.randint(row['low'], row['high'])
+        url = f'{prefix}num={street_num}&street={row["street"]}'
     return url
 
 def main(num_threads, inputfile, rangefile):
@@ -114,7 +120,6 @@ def main(num_threads, inputfile, rangefile):
 
     for i in range(len(threads)):
         threads[i].join()
-        res = results[i]
     all_end = time.time()
     all_elapsed = all_end - all_start
 
@@ -125,6 +130,7 @@ def main(num_threads, inputfile, rangefile):
     print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
     print(f'Executed {num_threads}, average: {avg_time:0.2f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={num_threads/all_elapsed:0.2f}')
+    print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean()}')
 
 if __name__ == "__main__":
     pd.options.display.float_format = "{:.6f}".format
