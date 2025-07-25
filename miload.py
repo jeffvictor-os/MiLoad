@@ -9,8 +9,8 @@
     v0.08: Improve diagnostics
     v0.09: Use input addresses, with street number low and high values, to randomize input.
     v0.10: Issue some requests without street numbers
-ToDo
     v0.11: Fix street number selection: odd, even, both
+ToDo
     v0.12: Issue incorrect addresses (typos, wrong street numbers)
     v0.13: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
@@ -64,13 +64,14 @@ def addr_to_url(address):
     url = f'{prefix}{num}street={' '.join(addr_list)}'
     return url
 
-def addr_range_to_url(row):
+def addr_range_to_url(row, sides):
     prefix = 'https://address.mivoter.org/index.php?'
     if random.randint(1,10) == 1:
         # Issue request without a street number.
         url = f'{prefix}street={row["street"]}'
     else:
-        street_num = random.randint(row['low'], row['high'])
+        street_num = random.choice([n for n in sides[row['side']] 
+                                   if row['low'] <= n <= row['high']])
         url = f'{prefix}num={street_num}&street={row["street"]}'
     return url
 
@@ -79,8 +80,10 @@ def main(num_threads, inputfile, rangefile):
     # Get addresses
     getaddr_start = time.time()
     if inputfile is None and rangefile is None:
+        # Use the URLs defined above
         urls = default_urls
     elif inputfile is not None:
+        # Use the inputfile as a list of addresses
         try:
             with open(inputfile, 'r') as file:
                 lines = file.readlines()
@@ -93,8 +96,20 @@ def main(num_threads, inputfile, rangefile):
             print(f'An error occurred: {e}')
             sys.exit(1)
     else:
+        # rangefile is a list of address ranges.
+        # Use them to generate valid addreses.
         range_df = pd.read_csv(rangefile)
-        urls = range_df.apply(addr_range_to_url, axis=1).to_list()
+        both = range(1,105000)
+        odd  = range(1,105000, 2)
+        # There is a street number range "0,0".
+        even = range(0,105000, 2)
+        sides = {
+            'B': both,
+            'O': odd,
+            'E': even
+            }
+        urls = range_df.apply(addr_range_to_url, axis=1, 
+                              sides=sides).to_list()
 
     if DEBUG:
         print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
@@ -117,6 +132,7 @@ def main(num_threads, inputfile, rangefile):
     all_start = time.time()
     for i in range(len(threads)):
         threads[i].start()
+        time.sleep(0.01)
 
     for i in range(len(threads)):
         threads[i].join()
@@ -130,7 +146,7 @@ def main(num_threads, inputfile, rangefile):
     print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
     print(f'Executed {num_threads}, average: {avg_time:0.2f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={num_threads/all_elapsed:0.2f}')
-    print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean()}')
+    print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
 
 if __name__ == "__main__":
     pd.options.display.float_format = "{:.6f}".format
