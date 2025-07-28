@@ -64,16 +64,6 @@ def addr_to_url(address):
     url = f'{prefix}{num}street={' '.join(addr_list)}'
     return url
 
-def addr_range_to_url(row, sides):
-    prefix = 'https://address.mivoter.org/index.php?'
-    if random.randint(1,10) == 1:
-        # Issue request without a street number.
-        url = f'{prefix}street={row["street"]}'
-    else:
-        street_num = random.choice([n for n in sides[row['side']] 
-                                   if row['low'] <= n <= row['high']])
-        url = f'{prefix}num={street_num}&street={row["street"]}'
-    return url
 
 def main(num_threads, inputfile, rangefile):
     ''' main: retrieve optional address list, create threads, run all '''
@@ -95,24 +85,21 @@ def main(num_threads, inputfile, rangefile):
         except Exception as e:
             print(f'An error occurred: {e}')
             sys.exit(1)
+        if DEBUG:
+            print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
     else:
         # rangefile is a list of address ranges.
         # Use them to generate valid addreses.
         range_df = pd.read_csv(rangefile)
-        both = range(1,105000)
-        odd  = range(1,105000, 2)
-        # There is a street number range "0,0".
-        even = range(0,105000, 2)
-        sides = {
-            'B': both,
-            'O': odd,
-            'E': even
-            }
-        urls = range_df.apply(addr_range_to_url, axis=1, 
-                              sides=sides).to_list()
-
-    if DEBUG:
-        print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
+        # Only use entries with useful ranges
+        range_df = range_df[range_df['high'] - range_df['low'] > 10]
+        prefix = 'https://address.mivoter.org/index.php?'
+        range_df['street_num'] = range_df['low']+6
+        range_df['url'] = prefix + 'num=' + range_df['street_num'].astype(str) + '&street=' + range_df['street']
+        urls = range_df['url'].tolist()
+        
+        if DEBUG:
+            print(f'Randomizing {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
 
     mkthreads_start = time.time()
     results = []
