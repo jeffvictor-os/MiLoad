@@ -11,8 +11,10 @@
     v0.10: Issue some requests without street numbers
     v0.11: Fix street number selection: odd, even, both
 ToDo
-    v0.12: Issue incorrect addresses (typos, wrong street numbers)
-    v0.13: Isolate number of (simultaneous) threads from number of requests
+    v0.12: Remove randomized street numbers
+    v0.13: Refactor main() to prep for adding soak
+    v0.14: Issue incorrect addresses (typos, wrong street numbers)
+    v0.15: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
     v0.30: Convert threading to multi-processing
 
@@ -88,19 +90,13 @@ def main(num_threads, inputfile, rangefile):
         if DEBUG:
             print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
     else:
-        # rangefile is a list of address ranges.
+        # rangefile is a list of street number ranges.
         # Use them to generate valid addreses.
         range_df = pd.read_csv(rangefile)
-        # Only use entries with useful ranges
-        range_df = range_df[range_df['high'] - range_df['low'] > 10]
         prefix = 'https://address.mivoter.org/index.php?'
-        range_df['street_num'] = range_df['low']+6
-        range_df['url'] = prefix + 'num=' + range_df['street_num'].astype(str) + '&street=' + range_df['street']
+        range_df['url'] = prefix + 'num=' + range_df['low'].astype(str) + '&street=' + range_df['street']
         urls = range_df['url'].tolist()
         
-        if DEBUG:
-            print(f'Randomizing {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
-
     mkthreads_start = time.time()
     results = []
     # Create one empty dict for each thread
