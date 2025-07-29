@@ -12,8 +12,9 @@
     v0.11: Fix street number selection: odd, even, both
     v0.12: Remove randomized street numbers
     v0.13: Refactor main() to prep for adding soak
+    v0.14: Add soak method, single-threaded
 ToDo
-    v0.14: Add soak method
+    v0.15: Multithread the soak method
     v0.16: Issue incorrect addresses (typos, wrong street numbers)
     v0.17: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
@@ -112,7 +113,20 @@ def flood(num_threads, urls):
 
     return results, all_elapsed
 
-def main(num_threads, inputfile, rangefile):
+def soak(rate_goal, urls):
+    results = []
+    all_start = time.time()
+    delay = (1/rate_goal)-0.099
+    for i in range(10):
+        results.append({})
+        url = urls[random.randint(0, len(urls)-1)]
+        issue_request(url, results[i], i)
+        time.sleep(delay)
+    all_end = time.time()
+    all_elapsed = all_end - all_start
+    return results, all_elapsed
+
+def main(num_threads, inputfile, rangefile, rate_goal):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
@@ -131,8 +145,12 @@ def main(num_threads, inputfile, rangefile):
         prefix = 'https://address.mivoter.org/index.php?'
         range_df['url'] = prefix + 'num=' + range_df['low'].astype(str) + '&street=' + range_df['street']
         urls = range_df['url'].tolist()
-        
-    results, all_elapsed = flood(num_threads, urls)
+
+    if rate_goal is not None:
+        print('Rate goal=', rate_goal)
+        results, all_elapsed = soak(rate_goal, urls)
+    else:
+        results, all_elapsed = flood(num_threads, urls)
 
     results_df = pd.DataFrame(results)
     results_df_sort = results_df.sort_values(by='start')
@@ -150,8 +168,9 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--threads', type=int, default=10, help="Number of simultaneous threads")
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
     parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
+    parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
     args = parser.parse_args()
 
-    main(args.threads, args.inputfile, args.rangefile)
+    main(args.threads, args.inputfile, args.rangefile, args.soak)
 
 
