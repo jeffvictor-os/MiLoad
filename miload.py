@@ -10,11 +10,12 @@
     v0.09: Use input addresses, with street number low and high values, to randomize input.
     v0.10: Issue some requests without street numbers
     v0.11: Fix street number selection: odd, even, both
-ToDo
     v0.12: Remove randomized street numbers
     v0.13: Refactor main() to prep for adding soak
-    v0.14: Issue incorrect addresses (typos, wrong street numbers)
-    v0.15: Isolate number of (simultaneous) threads from number of requests
+ToDo
+    v0.14: Add soak method
+    v0.16: Issue incorrect addresses (typos, wrong street numbers)
+    v0.17: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
     v0.30: Convert threading to multi-processing
 
@@ -29,7 +30,7 @@ import sys
 import threading
 import time
 
-DEBUG=False
+DEBUG=True
 
 default_urls = [
     'https://address.mivoter.org/index.php?num=1&street=Main St',
@@ -57,6 +58,7 @@ def issue_request(url, result, i):
               f'{response.json()["rows"][0]["street"]}')
 
 def addr_to_url(address):
+    ''' Assumes that every address begins with a street number. '''
     num = ''
     prefix = 'https://address.mivoter.org/index.php?'
     address = address.strip()
@@ -66,44 +68,29 @@ def addr_to_url(address):
     url = f'{prefix}{num}street={' '.join(addr_list)}'
     return url
 
+def read_static_addrs(inputfile):
+    try:
+        with open(inputfile, 'r') as file:
+            lines = file.readlines()
+            urls = [addr_to_url(line) for line in lines]
 
-def main(num_threads, inputfile, rangefile):
-    ''' main: retrieve optional address list, create threads, run all '''
-    # Get addresses
-    getaddr_start = time.time()
-    if inputfile is None and rangefile is None:
-        # Use the URLs defined above
-        urls = default_urls
-    elif inputfile is not None:
-        # Use the inputfile as a list of addresses
-        try:
-            with open(inputfile, 'r') as file:
-                lines = file.readlines()
-                urls = [addr_to_url(line) for line in lines]
+    except FileNotFoundError:
+        print(f'Error: The file "{inputfile}" was not found.')
+        sys.exit(1)
+    except Exception as e:
+        print(f'An error occurred: {e}')
+        sys.exit(1)
 
-        except FileNotFoundError:
-            print(f'Error: The file "{inputfile}" was not found.')
-            sys.exit(1)
-        except Exception as e:
-            print(f'An error occurred: {e}')
-            sys.exit(1)
-        if DEBUG:
-            print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
-    else:
-        # rangefile is a list of street number ranges.
-        # Use them to generate valid addreses.
-        range_df = pd.read_csv(rangefile)
-        prefix = 'https://address.mivoter.org/index.php?'
-        range_df['url'] = prefix + 'num=' + range_df['low'].astype(str) + '&street=' + range_df['street']
-        urls = range_df['url'].tolist()
-        
-    mkthreads_start = time.time()
+    return urls
+
+def flood(num_threads, urls):
     results = []
     # Create one empty dict for each thread
     for r in range(num_threads):
         results.append({})
     threads = []
 
+    mkthreads_start = time.time()
     for i in range(int(num_threads)):
         url = urls[random.randint(0, len(urls)-1)]
 
@@ -115,12 +102,37 @@ def main(num_threads, inputfile, rangefile):
     all_start = time.time()
     for i in range(len(threads)):
         threads[i].start()
-        time.sleep(0.01)
+        time.sleep(0.009)
 
     for i in range(len(threads)):
         threads[i].join()
+
     all_end = time.time()
     all_elapsed = all_end - all_start
+
+    return results, all_elapsed
+
+def main(num_threads, inputfile, rangefile):
+    ''' main: retrieve optional address list, create threads, run all '''
+    # Get addresses
+    getaddr_start = time.time()
+    if inputfile is None and rangefile is None:
+        # Use the URLs defined above
+        urls = default_urls
+    elif inputfile is not None:
+        # Use the inputfile as a list of addresses
+        urls = read_static_addrs(inputfile)
+        if DEBUG:
+            print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
+    else:
+        # rangefile is a list of street number ranges.
+        # Use them to generate valid addreses.
+        range_df = pd.read_csv(rangefile)
+        prefix = 'https://address.mivoter.org/index.php?'
+        range_df['url'] = prefix + 'num=' + range_df['low'].astype(str) + '&street=' + range_df['street']
+        urls = range_df['url'].tolist()
+        
+    results, all_elapsed = flood(num_threads, urls)
 
     results_df = pd.DataFrame(results)
     results_df_sort = results_df.sort_values(by='start')
