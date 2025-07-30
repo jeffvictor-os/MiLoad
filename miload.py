@@ -13,8 +13,8 @@
     v0.12: Remove randomized street numbers
     v0.13: Refactor main() to prep for adding soak
     v0.14: Add soak method, single-threaded
-ToDo
     v0.15: Multithread the soak method
+ToDo
     v0.16: Issue incorrect addresses (typos, wrong street numbers)
     v0.17: Isolate number of (simultaneous) threads from number of requests
     v0.20: Simulate user typing
@@ -23,6 +23,7 @@ ToDo
     Author: Jeff Victor
 '''
 import argparse
+import itertools
 from math import floor as floor
 import pandas as pd
 import random
@@ -51,7 +52,7 @@ def issue_request(url, result, i):
     result['elapsed']    = response.elapsed.total_seconds()
     resp_json = response.json()
     result['num_matches'] = len(resp_json['rows'])
-    if DEBUG:
+    if DEBUG == 2:
         end_short = floor(end / 1000) * 1000
         print(f'{end-end_short:0.4f} : {url[38:]}: Found {response.json()["count"]} matches:',
               f'{response.json()["rows"][0]["low"]}',
@@ -66,7 +67,7 @@ def addr_to_url(address):
     addr_list = address.split()
     if addr_list[0].isdigit():
         num = 'num=' + addr_list.pop(0) + '&'
-    url = f'{prefix}{num}street={' '.join(addr_list)}'
+    url = f'{prefix}{num}street={" ".join(addr_list)}'
     return url
 
 def read_static_addrs(inputfile):
@@ -113,17 +114,43 @@ def flood(num_threads, urls):
 
     return results, all_elapsed
 
-def soak(rate_goal, urls):
-    results = []
-    all_start = time.time()
-    delay = (1/rate_goal)-0.099
-    for i in range(10):
+def one_tub(urls, delay, results):
+    ''' For the Soak method, each thread issues a sequence of requests.'''
+    for i in range(30):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
         issue_request(url, results[i], i)
         time.sleep(delay)
+
+def soak(num_threads, urls, rate_goal):
+    ''' This method issues a metered rate of requests to the server. '''
+    # Create list of lists. Each of the lists will be shared with a thread so
+    # it can add result dicts to the list. The lists will be combined later.
+    results_list_list = []
+    # Create one empty list for each thread
+    for r in range(num_threads):
+        results_list_list.append([])
+    delay = num_threads/rate_goal - 0.12
+    if DEBUG:
+        print(f'Delay: {delay:0.3f}')
+
+    threads = []
+    for i in range(int(num_threads)):
+        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i]))
+        threads.append(t)
+
+    all_start = time.time()
+    for i in range(len(threads)):
+        threads[i].start()
+        time.sleep(0.009)
+
+    for i in range(len(threads)):
+        threads[i].join()
+
     all_end = time.time()
     all_elapsed = all_end - all_start
+
+    results = list(itertools.chain(*results_list_list)) 
     return results, all_elapsed
 
 def main(num_threads, inputfile, rangefile, rate_goal):
@@ -147,9 +174,11 @@ def main(num_threads, inputfile, rangefile, rate_goal):
         urls = range_df['url'].tolist()
 
     if rate_goal is not None:
+        method = 'Soak'
         print('Rate goal=', rate_goal)
-        results, all_elapsed = soak(rate_goal, urls)
+        results, all_elapsed = soak(num_threads, urls, rate_goal)
     else:
+        method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
 
     results_df = pd.DataFrame(results)
@@ -158,7 +187,9 @@ def main(num_threads, inputfile, rangefile, rate_goal):
 
     print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
-    print(f'Executed {num_threads}, average: {avg_time:0.2f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={num_threads/all_elapsed:0.2f}')
+    
+    print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
+    print(f'{len(results_df)} requests, average: {avg_time:0.2f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
     print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
 
 if __name__ == "__main__":
