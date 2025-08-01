@@ -14,11 +14,16 @@
     v0.13: Refactor main() to prep for adding soak
     v0.14: Add soak method, single-threaded
     v0.15: Multithread the soak method
+    v0.16: Set maximum number of returned addresses to 5
 ToDo
-    v0.16: Issue incorrect addresses (typos, wrong street numbers)
-    v0.17: Isolate number of (simultaneous) threads from number of requests
-    v0.20: Simulate user typing
-    v0.30: Convert threading to multi-processing
+    v0.17: Option to set Runtime
+Later
+    v0.20: Total number of requests
+    v0.21: Feedback loop to adjust delay
+    v0.xx: Issue incorrect addresses (typos, wrong street numbers)
+    v0.xx: Isolate number of (simultaneous) threads from number of requests
+    v0.xx: Simulate user typing
+    v0.xx: Convert threading to multi-processing
 
     Author: Jeff Victor
 '''
@@ -62,7 +67,7 @@ def issue_request(url, result, i):
 def addr_to_url(address):
     ''' Assumes that every address begins with a street number. '''
     num = ''
-    prefix = 'https://address.mivoter.org/index.php?'
+    prefix = 'https://address.mivoter.org/index.php?max=5&'
     address = address.strip()
     addr_list = address.split()
     if addr_list[0].isdigit():
@@ -169,7 +174,7 @@ def main(num_threads, inputfile, rangefile, rate_goal):
         # rangefile is a list of street number ranges.
         # Use them to generate valid addreses.
         range_df = pd.read_csv(rangefile)
-        prefix = 'https://address.mivoter.org/index.php?'
+        prefix = 'https://address.mivoter.org/index.php?max=5&'
         range_df['url'] = prefix + 'num=' + range_df['low'].astype(str) + '&street=' + range_df['street']
         urls = range_df['url'].tolist()
 
