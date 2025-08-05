@@ -15,8 +15,9 @@
     v0.14: Add soak method, single-threaded
     v0.15: Multithread the soak method
     v0.16: Set maximum number of returned addresses to 5
+    v0.17: Option to set loadtest duration
 ToDo
-    v0.17: Option to set Runtime
+    v0.18: Option to run on server: remove network latency factor from delay calculation
 Later
     v0.20: Total number of requests
     v0.21: Feedback loop to adjust delay
@@ -119,15 +120,18 @@ def flood(num_threads, urls):
 
     return results, all_elapsed
 
-def one_tub(urls, delay, results):
+def one_tub(urls, delay, results, duration):
     ''' For the Soak method, each thread issues a sequence of requests.'''
+    begin = time.time()
     for i in range(30):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
         issue_request(url, results[i], i)
+        if time.time() - begin > duration:
+            break
         time.sleep(delay)
 
-def soak(num_threads, urls, rate_goal):
+def soak(num_threads, urls, rate_goal, duration):
     ''' This method issues a metered rate of requests to the server. '''
     # Create list of lists. Each of the lists will be shared with a thread so
     # it can add result dicts to the list. The lists will be combined later.
@@ -141,7 +145,7 @@ def soak(num_threads, urls, rate_goal):
 
     threads = []
     for i in range(int(num_threads)):
-        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i]))
+        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration))
         threads.append(t)
 
     all_start = time.time()
@@ -158,7 +162,7 @@ def soak(num_threads, urls, rate_goal):
     results = list(itertools.chain(*results_list_list)) 
     return results, all_elapsed
 
-def main(num_threads, inputfile, rangefile, rate_goal):
+def main(num_threads, inputfile, rangefile, rate_goal, duration):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
@@ -181,7 +185,7 @@ def main(num_threads, inputfile, rangefile, rate_goal):
     if rate_goal is not None:
         method = 'Soak'
         print('Rate goal=', rate_goal)
-        results, all_elapsed = soak(num_threads, urls, rate_goal)
+        results, all_elapsed = soak(num_threads, urls, rate_goal, duration)
     else:
         method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
@@ -201,12 +205,13 @@ if __name__ == "__main__":
     pd.options.display.float_format = "{:.6f}".format
     
     parser = argparse.ArgumentParser(description="A sample script demonstrating argparse.")
+    parser.add_argument('-d', '--duration', type=int, default=5, help="Duration of test")
     parser.add_argument('-t', '--threads', type=int, default=10, help="Number of simultaneous threads")
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
     parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
     args = parser.parse_args()
 
-    main(args.threads, args.inputfile, args.rangefile, args.soak)
+    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration)
 
 
