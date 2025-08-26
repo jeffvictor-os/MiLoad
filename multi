@@ -8,9 +8,9 @@ echo Running 1 copies...
 
 #python3 miload.py -i addresses -s 40 -t 6 | grep overall &
 #python3 miload.py -i addresses -s 40 -t 6 | grep overall &
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
+python3 miload.py -i addresses -s 180 -t 6 -d 60 &
 
-#python3 miload.py -i addresses -s 40 -t 6 -d 20  &
-#python3 miload.py -i addresses -s 40 -t 6 -d 20  &
-python3 miload.py -i addresses -s 40 -t 6 -d 40 
+python3 miload.py -i addresses -s 180 -t 6 -d 60  &
+python3 miload.py -i addresses -s 180 -t 6 -d 60  &
+python3 miload.py -i addresses -s 180 -t 6 -d 60 
 

@@ -125,10 +125,12 @@ def one_tub(urls, delay, results, duration):
     ''' For the Soak method, each thread issues a sequence of requests.'''
     begin = time.time()
     session = requests.Session()
-    for i in range(200):
+    for i in range(1000):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
         issue_request(session, url, results[i], i)
+        if delay < 0:
+            continue
         if time.time() - begin > duration:
             break
         time.sleep(delay)
@@ -141,7 +143,7 @@ def soak(num_threads, urls, rate_goal, duration):
     # Create one empty list for each thread
     for r in range(num_threads):
         results_list_list.append([])
-    delay = num_threads/rate_goal - 0.12
+    delay = num_threads/rate_goal - 0.04
     if DEBUG:
         print(f'Delay: {delay:0.3f}')
 
@@ -200,7 +202,7 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration):
     avg_time = results_df['elapsed'].mean()
     
     print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
-    print(f'{len(results_df)} requests, average: {avg_time:0.2f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
+    print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
     print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
 
 if __name__ == "__main__":
