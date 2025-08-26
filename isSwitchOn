@@ -1,0 +1,8 @@
+#!/bin/bash
+
+switch=`curl https://about.mivoter.org/switch.txt 2>/dev/null`
+if test $switch = "1"; then
+   exit 0
+else
+   exit 1
+fi
