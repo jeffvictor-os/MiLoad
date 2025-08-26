@@ -123,7 +123,7 @@ def flood(num_threads, urls):
 def one_tub(urls, delay, results, duration):
     ''' For the Soak method, each thread issues a sequence of requests.'''
     begin = time.time()
-    for i in range(30):
+    for i in range(200):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
         issue_request(url, results[i], i)
