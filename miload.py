@@ -16,8 +16,9 @@
     v0.15: Multithread the soak method
     v0.16: Set maximum number of returned addresses to 5
     v0.17: Option to set loadtest duration
+    v0.18: Use a Session for URL requests
 ToDo
-    v0.18: Option to run on server: remove network latency factor from delay calculation
+    v0.19: Option to run on server: remove network latency factor from delay calculation
 Later
     v0.20: Total number of requests
     v0.21: Feedback loop to adjust delay
@@ -45,10 +46,10 @@ default_urls = [
     'https://address.mivoter.org/index.php?num=8000&street=anchor bay dr'
     ]
 
-def issue_request(url, result, i):
+def issue_request(session, url, result, i):
     ''' Issue a web request to the specific URL. '''
     start    = time.time()
-    response = requests.get(url)
+    response = session.get(url)
     end      = time.time()
     # Store data for later analysis.
     result['start'] = start
@@ -123,10 +124,11 @@ def flood(num_threads, urls):
 def one_tub(urls, delay, results, duration):
     ''' For the Soak method, each thread issues a sequence of requests.'''
     begin = time.time()
+    session = requests.Session()
     for i in range(200):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
-        issue_request(url, results[i], i)
+        issue_request(session, url, results[i], i)
         if time.time() - begin > duration:
             break
         time.sleep(delay)
