@@ -17,6 +17,7 @@
     v0.16: Set maximum number of returned addresses to 5
     v0.17: Option to set loadtest duration
     v0.18: Use a Session for URL requests
+    v0.19: Make Sessions an option
 ToDo
     v0.19: Option to run on server: remove network latency factor from delay calculation
 Later
@@ -49,7 +50,10 @@ default_urls = [
 def issue_request(session, url, result, i):
     ''' Issue a web request to the specific URL. '''
     start    = time.time()
-    response = session.get(url)
+    if session is None:
+        response = requests.get(url)
+    else:
+        response = session.get(url)
     end      = time.time()
     # Store data for later analysis.
     result['start'] = start
@@ -103,7 +107,7 @@ def flood(num_threads, urls):
     for i in range(int(num_threads)):
         url = urls[random.randint(0, len(urls)-1)]
 
-        t = threading.Thread(target=issue_request, args=(url, results[i], i))
+        t = threading.Thread(target=issue_request, args=(None, url, results[i], i))
         threads.append(t)
     if DEBUG:
         print(f'Creating {num_threads} threads took {time.time()-mkthreads_start:0.6f} seconds.')
@@ -121,10 +125,13 @@ def flood(num_threads, urls):
 
     return results, all_elapsed
 
-def one_tub(urls, delay, results, duration):
+def one_tub(urls, delay, results, duration, use_session):
     ''' For the Soak method, each thread issues a sequence of requests.'''
     begin = time.time()
-    session = requests.Session()
+    if use_session is True:
+        session = requests.Session()
+    else:
+        session = None
     for i in range(1000):
         results.append({})
         url = urls[random.randint(0, len(urls)-1)]
@@ -135,7 +142,7 @@ def one_tub(urls, delay, results, duration):
             break
         time.sleep(delay)
 
-def soak(num_threads, urls, rate_goal, duration):
+def soak(num_threads, urls, rate_goal, duration, use_session):
     ''' This method issues a metered rate of requests to the server. '''
     # Create list of lists. Each of the lists will be shared with a thread so
     # it can add result dicts to the list. The lists will be combined later.
@@ -149,7 +156,7 @@ def soak(num_threads, urls, rate_goal, duration):
 
     threads = []
     for i in range(int(num_threads)):
-        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration))
+        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
         threads.append(t)
 
     all_start = time.time()
@@ -166,7 +173,7 @@ def soak(num_threads, urls, rate_goal, duration):
     results = list(itertools.chain(*results_list_list)) 
     return results, all_elapsed
 
-def main(num_threads, inputfile, rangefile, rate_goal, duration):
+def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
@@ -189,7 +196,7 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration):
     if rate_goal is not None:
         method = 'Soak'
         print('Rate goal=', rate_goal)
-        results, all_elapsed = soak(num_threads, urls, rate_goal, duration)
+        results, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session)
     else:
         method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
@@ -214,8 +221,9 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
     parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
+    parser.add_argument('-e', '--session', action=argparse.BooleanOptionalAction, type=bool, default=False, help="Use persistent session in a thread?")
     args = parser.parse_args()
 
-    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration)
+    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session)
 
 
