@@ -221,7 +221,8 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
     parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
-    parser.add_argument('-e', '--session', action=argparse.BooleanOptionalAction, type=bool, default=False, help="Use persistent session in a thread?")
+    parser.add_argument('-e', '--session', action='store_true', help="Use persistent session in a thread?")
+
     args = parser.parse_args()
 
     main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session)
