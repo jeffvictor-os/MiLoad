@@ -18,6 +18,7 @@
     v0.17: Option to set loadtest duration
     v0.18: Use a Session for URL requests
     v0.19: Make Sessions an option
+    v0.20: Simulate users typing
 ToDo
     v0.19: Option to run on server: remove network latency factor from delay calculation
 Later
@@ -41,6 +42,7 @@ import threading
 import time
 
 DEBUG=True
+TYPING_DELAY = 0.3
 
 default_urls = [
     'https://address.mivoter.org/index.php?num=1&street=Main St',
@@ -125,8 +127,33 @@ def flood(num_threads, urls):
 
     return results, all_elapsed
 
+def one_user(url, results):
+    ''' one_user(): Issue http requests that mimic a user typing sufficient keys to 
+        find their address '''
+    session = requests.Session()
+    for i in range(8):
+        results.append({})
+        issue_request(session, url, results[i], i)
+        time.sleep(TYPING_DELAY)
+    session.close()
+
+def many_users(urls, delay, results, duration):
+    ''' many_users(): simulate many users, searching for their address, 
+        one at a time '''
+    begin = time.time()
+
+    for i in range(1000):
+        url = urls[random.randint(0, len(urls)-1)]
+        one_user(url, results)
+        if delay < 0:
+            continue
+        if time.time() - begin > duration:
+            break
+        time.sleep(delay)
+        
+    
 def one_tub(urls, delay, results, duration, use_session):
-    ''' For the Soak method, each thread issues a sequence of requests.'''
+    ''' one_tub(): For the Soak method, each thread issues a sequence of requests.'''
     begin = time.time()
     if use_session is True:
         session = requests.Session()
@@ -141,9 +168,11 @@ def one_tub(urls, delay, results, duration, use_session):
         if time.time() - begin > duration:
             break
         time.sleep(delay)
+    if use_session is True:
+        session.close()
 
-def soak(num_threads, urls, rate_goal, duration, use_session):
-    ''' This method issues a metered rate of requests to the server. '''
+def soak(num_threads, urls, rate_goal, duration, use_session, user):
+    ''' soak(): method issues a metered rate of requests to the server. '''
     # Create list of lists. Each of the lists will be shared with a thread so
     # it can add result dicts to the list. The lists will be combined later.
     results_list_list = []
@@ -155,9 +184,19 @@ def soak(num_threads, urls, rate_goal, duration, use_session):
         print(f'Delay: {delay:0.3f}')
 
     threads = []
-    for i in range(int(num_threads)):
-        t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
-        threads.append(t)
+    if user is False:
+        print('Using Soak Method without users')
+        for i in range(int(num_threads)):
+            t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
+            threads.append(t)
+    else:
+        print('Using Soak Method with user simulation')
+        delay = 0.1 * delay
+        print(f'Changed delay to {delay:0.2f}')
+        for i in range(int(num_threads)):
+            t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], duration))
+            threads.append(t)
+        
 
     all_start = time.time()
     for i in range(len(threads)):
@@ -173,7 +212,7 @@ def soak(num_threads, urls, rate_goal, duration, use_session):
     results = list(itertools.chain(*results_list_list)) 
     return results, all_elapsed
 
-def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session):
+def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, user):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
@@ -195,8 +234,7 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session):
 
     if rate_goal is not None:
         method = 'Soak'
-        print('Rate goal=', rate_goal)
-        results, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session)
+        results, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session, user)
     else:
         method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
@@ -222,9 +260,19 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
     parser.add_argument('-e', '--session', action='store_true', help="Use persistent session in a thread?")
+    parser.add_argument('-u', '--user',  action='store_true', help="Simulate user typing?")
+
 
     args = parser.parse_args()
+    if DEBUG:
+        if args.soak is not None:
+            print(f'Using soak method with desired rate goal: {args.soak}')
+        else:
+            print('Using flood method')
+        if args.user:
+            print('Simulating user typing')
 
-    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session)
+
+    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
 
 
