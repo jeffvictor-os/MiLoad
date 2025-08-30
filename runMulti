@@ -4,10 +4,6 @@
 
 cd $HOME/MiLoad
 
-cd $HOME/MiLoad
-git fetch origin
-git pull  origin main
-
 now=`date +"%Y-%m-%d_%H:%M:%S"`
 
 ./multi >$now.log
