@@ -1,16 +1,17 @@
 #!/bin/bash
 
-echo Running 1 copies...
+echo Running 9 copies...
 
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
 
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
-#python3 miload.py -i addresses -s 40 -t 6 | grep overall &
-python3 miload.py -i addresses -s 180 -t 6 -d 60 &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
 
-python3 miload.py -i addresses -s 180 -t 6 -d 60  &
-python3 miload.py -i addresses -s 180 -t 6 -d 60  &
-python3 miload.py -i addresses -s 180 -t 6 -d 60 
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall
+
 
