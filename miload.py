@@ -21,8 +21,9 @@
     v0.20: Simulate users typing
     v0.21: Simulate users typing, phase 2
     v0.22: Report number of aborted connection requests, fix some minor bugs
+    v0.23: Improve error handling
 ToDo
-    v0.23: Use multiprocessing as a wrapper around the existing features
+    v0.2x: Use multiprocessing as a wrapper around the existing features
     v0.xx: Option to run on server: remove network latency factor from delay calculation
     v0.xx: Feedback loop to adjust delay
 Later
@@ -56,13 +57,19 @@ def issue_request(session, url, result, i):
     ''' Issue a web request to the specific URL. '''
     start    = time.time()
     if session is None:
-        response = requests.get(url)
+        try:
+            response = requests.get(url)
+        except requests.exceptions.ConnectionError:
+            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
+            return
     else:
         try:
             response = session.get(url)
         except requests.exceptions.ConnectionError:
-            print ('============ CONNECTION REQUEST ABORTED ============')
-    end      = time.time()
+            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
+            return
+
+    end = time.time()
     # Store data for later analysis.
     result['start'] = start
     result['end']   = end
