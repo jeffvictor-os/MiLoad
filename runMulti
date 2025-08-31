@@ -1,0 +1,9 @@
+#!/bin/bash
+
+. $HOME/.bash_profile >/dev/null 2>/dev/null
+
+cd $HOME/MiLoad
+
+now=`date +"%Y-%m-%d_%H:%M:%S"`
+
+./multi >$now.log
