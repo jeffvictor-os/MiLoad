@@ -20,9 +20,10 @@
     v0.19: Make Sessions an option
     v0.20: Simulate users typing
     v0.21: Simulate users typing, phase 2
+    v0.22: Report number of aborted connection requests, fix some minor bugs
 ToDo
+    v0.23: Use multiprocessing as a wrapper around the existing features
     v0.xx: Option to run on server: remove network latency factor from delay calculation
-    v0.xx: Use multiprocessing as a wrapper around the existing features
     v0.xx: Feedback loop to adjust delay
 Later
     v0.xx: Total number of requests
@@ -57,7 +58,10 @@ def issue_request(session, url, result, i):
     if session is None:
         response = requests.get(url)
     else:
-        response = session.get(url)
+        try:
+            response = session.get(url)
+        except requests.exceptions.ConnectionError:
+            print ('============ CONNECTION REQUEST ABORTED ============')
     end      = time.time()
     # Store data for later analysis.
     result['start'] = start
@@ -66,7 +70,6 @@ def issue_request(session, url, result, i):
     result['ret_code'] = response
     result['elapsed']    = response.elapsed.total_seconds()
     resp_json = response.json()
-#    print(resp_json)
     result['num_matches'] = len(resp_json['rows'])
     if DEBUG == 2:
         end_short = floor(end / 1000) * 1000
@@ -140,8 +143,8 @@ def one_user(url, results):
     match = re.search(patt, url)
     num_str = f"num={match.group('num')}"
     street_str = f"street={match.group('street')}"
+    print(street_str)
     street_len = len(match.group('street'))
-    print(street_str, ',', street_len)
     
     for i in range(min(street_len-3, 8)):
         addr_portion = f"{num_str}&street={street_str[7:11+i]}"
@@ -155,12 +158,11 @@ def many_users(urls, delay, results, duration):
     ''' many_users(): simulate many users, searching for their address, 
         one at a time '''
     begin = time.time()
-
+    if delay < 0:
+        delay = 0
     for i in range(1000):
         url = urls[random.randint(0, len(urls)-1)]
         one_user(url, results)
-        if delay < 0:
-            continue
         if time.time() - begin > duration:
             break
         time.sleep(delay)
