@@ -22,7 +22,9 @@
     v0.21: Simulate users typing, phase 2
     v0.22: Report number of aborted connection requests, fix some minor bugs
     v0.23: Improve error handling
+    v0.24: Count users per minute
 ToDo
+    v0.25: Count connection aborts per minute
     v0.2x: Use multiprocessing as a wrapper around the existing features
     v0.xx: Option to run on server: remove network latency factor from delay calculation
     v0.xx: Feedback loop to adjust delay
@@ -150,18 +152,25 @@ def one_user(url, results):
     match = re.search(patt, url)
     num_str = f"num={match.group('num')}"
     street_str = f"street={match.group('street')}"
-    print(street_str)
+    print('.', end='', flush=True)
     street_len = len(match.group('street'))
     
-    for i in range(min(street_len-3, 8)):
+    i = None
+    end_at = min(street_len-3, 8)
+    if end_at < 1:
+        end_at = 1
+    for i in range(end_at):
         addr_portion = f"{num_str}&street={street_str[7:11+i]}"
         typed_url = begin + addr_portion
         results.append({})
         issue_request(session, typed_url, results[i], i)
         time.sleep(.3)
     session.close()
+    if i is None:
+        print(f'one_user: i is unbound for {street_str}', flush=True)
+    return i
 
-def many_users(urls, delay, results, duration):
+def many_users(urls, delay, results, user_count, duration):
     ''' many_users(): simulate many users, searching for their address, 
         one at a time '''
     begin = time.time()
@@ -169,10 +178,12 @@ def many_users(urls, delay, results, duration):
         delay = 0
     for i in range(1000):
         url = urls[random.randint(0, len(urls)-1)]
-        one_user(url, results)
+        requests = one_user(url, results)
         if time.time() - begin > duration:
             break
         time.sleep(delay)
+    # Store the number of users simulated.
+    user_count.append(i+1)
         
     
 def one_tub(urls, delay, results, duration, use_session):
@@ -196,12 +207,17 @@ def one_tub(urls, delay, results, duration, use_session):
 
 def soak(num_threads, urls, rate_goal, duration, use_session, user):
     ''' soak(): method issues a metered rate of requests to the server. '''
-    # Create list of lists. Each of the lists will be shared with a thread so
-    # it can add result dicts to the list. The lists will be combined later.
+    # Create a list of lists for result info. Each of the individual lists 
+    # will be shared with a thread so it can add result dicts to the list. 
+    # The lists will be combined later and summarized.
     results_list_list = []
     # Create one empty list for each thread
     for r in range(num_threads):
         results_list_list.append([])
+    # Create a list to store the number of users simulated by each thread.
+    user_count_list_list = []
+    for r in range(num_threads):
+        user_count_list_list.append([])
     delay = num_threads/rate_goal - 0.04
     if DEBUG:
         print(f'Delay: {delay:0.3f}')
@@ -217,7 +233,7 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
         delay = 0.1 * delay
         print(f'Changed delay to {delay:0.2f}')
         for i in range(int(num_threads)):
-            t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], duration))
+            t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], user_count_list_list[i], duration))
             threads.append(t)
         
 
@@ -232,13 +248,17 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
     all_end = time.time()
     all_elapsed = all_end - all_start
 
-    results = list(itertools.chain(*results_list_list)) 
-    return results, all_elapsed
+    results = list(itertools.chain(*results_list_list))
+    total_users = 0
+    for u_count in user_count_list_list:
+        total_users += sum(u_count)
+    return results, total_users, all_elapsed
 
 def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, user):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
+    total_users = 0
     if inputfile is None and rangefile is None:
         # Use the URLs defined above
         urls = default_urls
@@ -257,7 +277,7 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
 
     if rate_goal is not None:
         method = 'Soak'
-        results, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session, user)
+        results, total_users, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session, user)
     else:
         method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
@@ -268,6 +288,7 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
 
     print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
+    print(f'Total users: {total_users}, {total_users/all_elapsed*60:0.0f} users per minute')
     
     print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
     print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
