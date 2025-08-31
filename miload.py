@@ -19,15 +19,16 @@
     v0.18: Use a Session for URL requests
     v0.19: Make Sessions an option
     v0.20: Simulate users typing
+    v0.21: Simulate users typing, phase 2
 ToDo
-    v0.19: Option to run on server: remove network latency factor from delay calculation
+    v0.xx: Option to run on server: remove network latency factor from delay calculation
+    v0.xx: Use multiprocessing as a wrapper around the existing features
+    v0.xx: Feedback loop to adjust delay
 Later
-    v0.20: Total number of requests
-    v0.21: Feedback loop to adjust delay
+    v0.xx: Total number of requests
     v0.xx: Issue incorrect addresses (typos, wrong street numbers)
     v0.xx: Isolate number of (simultaneous) threads from number of requests
-    v0.xx: Simulate user typing
-    v0.xx: Convert threading to multi-processing
+
 
     Author: Jeff Victor
 '''
@@ -36,13 +37,14 @@ import itertools
 from math import floor as floor
 import pandas as pd
 import random
+import re
 import requests
 import sys
 import threading
 import time
 
 DEBUG=True
-TYPING_DELAY = 0.3
+TYPING_DELAY = 0.03
 
 default_urls = [
     'https://address.mivoter.org/index.php?num=1&street=Main St',
@@ -64,6 +66,7 @@ def issue_request(session, url, result, i):
     result['ret_code'] = response
     result['elapsed']    = response.elapsed.total_seconds()
     resp_json = response.json()
+#    print(resp_json)
     result['num_matches'] = len(resp_json['rows'])
     if DEBUG == 2:
         end_short = floor(end / 1000) * 1000
@@ -129,12 +132,23 @@ def flood(num_threads, urls):
 
 def one_user(url, results):
     ''' one_user(): Issue http requests that mimic a user typing sufficient keys to 
-        find their address '''
+        find their address. Begin requests with 5 char's, increment. '''
     session = requests.Session()
-    for i in range(8):
+    # Parse the URL so we can simulate typing
+    begin = url[:44]
+    patt = r"num=(?P<num>\w+)&street=(?P<street>[A-Za-z0-9 ]+)"
+    match = re.search(patt, url)
+    num_str = f"num={match.group('num')}"
+    street_str = f"street={match.group('street')}"
+    street_len = len(match.group('street'))
+    print(street_str, ',', street_len)
+    
+    for i in range(min(street_len-3, 8)):
+        addr_portion = f"{num_str}&street={street_str[7:11+i]}"
+        typed_url = begin + addr_portion
         results.append({})
-        issue_request(session, url, results[i], i)
-        time.sleep(TYPING_DELAY)
+        issue_request(session, typed_url, results[i], i)
+        time.sleep(.3)
     session.close()
 
 def many_users(urls, delay, results, duration):
