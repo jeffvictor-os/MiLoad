@@ -2,16 +2,16 @@
 
 echo "Running 9 copies..."
 
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
 
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
 
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall &
-python3 miload.py -i addresses -s 40 -t 6 -d 60  -u  | grep overall
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" &
+python3 miload.py -i addresses -s 40 -t 20 -d 60  -u  | egrep "users|overall" 
 
 
