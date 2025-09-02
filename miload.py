@@ -23,9 +23,10 @@
     v0.22: Report number of aborted connection requests, fix some minor bugs
     v0.23: Improve error handling
     v0.24: Count users per minute
+    v0.25: Multiprocessing, Phase 1: make it work, no frills
 ToDo
-    v0.25: Count connection aborts per minute
-    v0.2x: Use multiprocessing as a wrapper around the existing features
+    v0.26: Multiprocessing, Phase 2: consolidate output from proc's
+    v0.xx: Count connection aborts per minute
     v0.xx: Option to run on server: remove network latency factor from delay calculation
     v0.xx: Feedback loop to adjust delay
 Later
@@ -39,6 +40,7 @@ Later
 import argparse
 import itertools
 from math import floor as floor
+import multiprocessing as mp
 import pandas as pd
 import random
 import re
@@ -294,6 +296,17 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
     print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
 
+def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
+    mp.set_start_method('fork')
+    procs = []
+    for p in range(processes):
+        proc = mp.Process(target=main, args=(threads, inputfile, rangefile, soak, duration, session, user))
+        procs.append(proc)
+        proc.start()
+        
+    for p in procs:
+        p.join()
+
 if __name__ == "__main__":
     pd.options.display.float_format = "{:.6f}".format
     
@@ -305,6 +318,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
     parser.add_argument('-e', '--session', action='store_true', help="Use persistent session in a thread?")
     parser.add_argument('-u', '--user',  action='store_true', help="Simulate user typing?")
+    parser.add_argument('-p', '--processes', type=int, default=1, help="Number of processes to run")
 
 
     args = parser.parse_args()
@@ -317,6 +331,7 @@ if __name__ == "__main__":
             print('Simulating user typing')
 
 
-    main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
+    start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
+#   main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
 
 
