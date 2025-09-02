@@ -24,8 +24,8 @@
     v0.23: Improve error handling
     v0.24: Count users per minute
     v0.25: Multiprocessing, Phase 1: make it work, no frills
-ToDo
     v0.26: Multiprocessing, Phase 2: consolidate output from proc's
+ToDo
     v0.xx: Count connection aborts per minute
     v0.xx: Option to run on server: remove network latency factor from delay calculation
     v0.xx: Feedback loop to adjust delay
@@ -40,7 +40,7 @@ Later
 import argparse
 import itertools
 from math import floor as floor
-import multiprocessing as mp
+from multiprocessing import Process, Queue, set_start_method
 import pandas as pd
 import random
 import re
@@ -60,9 +60,19 @@ default_urls = [
 def issue_request(session, url, result, i):
     ''' Issue a web request to the specific URL. '''
     start    = time.time()
+    #######
+    headers = requests.utils.default_headers()
+
+    headers.update({
+        'User-Agent': 'python-requests/2.31.0',
+        'Accept-Encoding': 'gzip, deflate',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+    } )
+    #######
     if session is None:
         try:
-            response = requests.get(url)
+            response = requests.get(url, headers=headers)
         except requests.exceptions.ConnectionError:
             print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
             return
@@ -70,7 +80,7 @@ def issue_request(session, url, result, i):
         try:
             response = session.get(url)
         except requests.exceptions.ConnectionError:
-            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
+            print ('====== CONNECTION REQUEST ABORTED : SESSION =====', flush=True)
             return
 
     end = time.time()
@@ -221,18 +231,16 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
     for r in range(num_threads):
         user_count_list_list.append([])
     delay = num_threads/rate_goal - 0.04
-    if DEBUG:
-        print(f'Delay: {delay:0.3f}')
+#   if DEBUG:
+#       print(f'Delay: {delay:0.3f}')
 
     threads = []
     if user is False:
-        print('Using Soak Method without users')
         for i in range(int(num_threads)):
             t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
             threads.append(t)
     else:
-        print('Using Soak Method with user simulation')
-        delay = 0.1 * delay
+#       delay = 0.1 * delay
         print(f'Changed delay to {delay:0.2f}')
         for i in range(int(num_threads)):
             t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], user_count_list_list[i], duration))
@@ -256,7 +264,7 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
         total_users += sum(u_count)
     return results, total_users, all_elapsed
 
-def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, user):
+def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, user, qobj):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
     getaddr_start = time.time()
@@ -267,8 +275,8 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     elif inputfile is not None:
         # Use the inputfile as a list of addresses
         urls = read_static_addrs(inputfile)
-        if DEBUG:
-            print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
+ #      if DEBUG:
+ #          print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
     else:
         # rangefile is a list of street number ranges.
         # Use them to generate valid addreses.
@@ -288,22 +296,54 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     results_df_sort = results_df.sort_values(by='start')
     results_df_sort.to_csv('results.csv')
 
-    print('\n==== Statistics ====')
+#   print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
-    print(f'Total users: {total_users}, {total_users/all_elapsed*60:0.0f} users per minute')
+    user_rate = total_users/all_elapsed*60
+    print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
     
-    print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
-    print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
-    print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
+#   print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
+#   print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
+#   print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
+ 
+    # Send stats to spawner
+    stats_dict = { 'result_count': len(results_df),
+                   'elapsed': all_elapsed,
+                   'user_rate': user_rate
+    }
+    qobj.put(stats_dict)
 
 def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
-    mp.set_start_method('fork')
+    set_start_method('fork')
     procs = []
+    queues = []
+    stats = []
     for p in range(processes):
-        proc = mp.Process(target=main, args=(threads, inputfile, rangefile, soak, duration, session, user))
+        qobj = Queue()
+        queues.append(qobj)
+        proc = Process(target=main, args=(threads, inputfile, rangefile, soak, duration, session, user, qobj))
         procs.append(proc)
         proc.start()
-        
+ 
+    for q in queues:
+        stats.append(q.get())
+
+    total_users = processes * threads
+    total_results = 0
+    elapsed_sum = 0
+    user_rate_sum = 0
+    for s in stats:
+#       print(s)
+        total_results += s['result_count']
+        elapsed_sum   += s['elapsed']
+        user_rate_sum += s['user_rate']
+
+    elapsed   = elapsed_sum / len(stats)
+
+    print('=========\nOverall Statistics: ')
+    print(f'Total results:   {int(total_results)}')
+    print(f'Elapsed time:    {int(elapsed)}')
+    print(f'Total user rate: {int(user_rate_sum)} per minute')
+
     for p in procs:
         p.join()
 
@@ -325,10 +365,12 @@ if __name__ == "__main__":
     if DEBUG:
         if args.soak is not None:
             print(f'Using soak method with desired rate goal: {args.soak}')
+            if args.user:
+                print('Using Soak Method with user simulation')
+            else:
+                print('Using Soak Method without users')
         else:
             print('Using flood method')
-        if args.user:
-            print('Simulating user typing')
 
 
     start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
