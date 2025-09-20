@@ -26,6 +26,8 @@
     v0.25: Multiprocessing, Phase 1: make it work, no frills
     v0.26: Multiprocessing, Phase 2: consolidate output from proc's
 ToDo
+    v0.xx: Usability Phase 1: Use ssh to execute instances on other systems
+    v0.xx: Usability Phase 2: Aggregate output from remote instances
     v0.xx: Count connection aborts per minute
     v0.xx: Option to run on server: remove network latency factor from delay calculation
     v0.xx: Feedback loop to adjust delay
