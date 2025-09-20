@@ -340,6 +340,7 @@ def start_procs (processes, threads, inputfile, rangefile, soak, duration, sessi
     elapsed   = elapsed_sum / len(stats)
 
     print('=========\nOverall Statistics: ')
+    print(f'Simultaneous users:   {int(total_users)}')
     print(f'Total results:   {int(total_results)}')
     print(f'Elapsed time:    {int(elapsed)}')
     print(f'Total user rate: {int(user_rate_sum)} per minute')
@@ -364,13 +365,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if DEBUG:
         if args.soak is not None:
-            print(f'Using soak method with desired rate goal: {args.soak}')
+            print(f'Using Soak Method with desired rate goal: {args.soak}')
             if args.user:
                 print('Using Soak Method with user simulation')
             else:
                 print('Using Soak Method without users')
         else:
             print('Using flood method')
+        print(f'Starting {args.processes} process(es)...')
+        print(f'Starting {args.threads} per process...')
+        
 
 
     start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
