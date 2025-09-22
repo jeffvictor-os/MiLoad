@@ -336,7 +336,8 @@ def start_remote_instances(args, remote_returns_list_list):
     # Prepare storage for output from remote instances.
     threads = []
     for i in range(num_hosts):
-        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s {args.soak} -t {args.threads} -d {args.duration}  -u  -p {args.processes}'
+        print(f'Starting instance on {hosts[i]}.')
+        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -r -i MiLoad/addresses -s {args.soak} -t {args.threads} -d {args.duration}  -u  -p {args.processes}'
         t = threading.Thread(target=thread_start_remote, args=(args, hosts[i], cmdline, remote_returns_list_list[i]))
         threads.append(t)
     for i in range(num_hosts):
