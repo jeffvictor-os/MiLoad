@@ -25,8 +25,8 @@
     v0.24: Count users per minute
     v0.25: Multiprocessing, Phase 1: make it work, no frills
     v0.26: Multiprocessing, Phase 2: consolidate output from proc's
+    v0.27: Usability Phase 1: Use ssh to execute instances on other systems
 ToDo
-    v0.xx: Usability Phase 1: Use ssh to execute instances on other systems
     v0.xx: Usability Phase 2: Aggregate output from remote instances
     v0.xx: Count connection aborts per minute
     v0.xx: Option to run on server: remove network latency factor from delay calculation
@@ -47,6 +47,7 @@ import pandas as pd
 import random
 import re
 import requests
+import subprocess
 import sys
 import threading
 import time
@@ -59,6 +60,14 @@ default_urls = [
     'https://address.mivoter.org/index.php?num=8000&street=anchor bay dr'
     ]
 
+def parse_host_file(file_path):
+    ''' File is expected to be text, one entry per line, in the form:
+        <user>@<host>. Passwordless ssh is required. '''
+    with open(file_path, 'r') as file:
+        lines = [line.strip() for line in file]
+    return lines
+ 
+    
 def issue_request(session, url, result, i):
     ''' Issue a web request to the specific URL. '''
     start    = time.time()
@@ -314,22 +323,59 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     }
     qobj.put(stats_dict)
 
-def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
+def thread_start_remote(args, host, cmdline, return_val):
+    print(f'Starting on {host}: {cmdline}')
+    cmd_tokens = cmdline.split()
+    stdout_err = subprocess.run(cmd_tokens, capture_output=True, text=True)
+    stdout = stdout_err.stdout
+    return_val.append(host+':::'+stdout)
+#   print(f'===\n{host}:\n' + stdout + '\n===\n')
+
+def start_remote_instances(nodes, empty):
+    ''' Use ssh to start one instance on another computer, potentially with 
+        multiple processes and/or threads. It will report its results in 
+        JSON format. '''
+    with open(nodes, 'r') as file:
+        hosts = [line.strip() for line in file]
+    num_hosts = len(hosts)
+
+    # Prepare storage for output from remote instances.
+    remote_returns_list_list = []
+    for r in range(num_hosts):
+        remote_returns_list_list.append([])
+
+    threads = []
+    for i in range(num_hosts):
+        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s 30 -t 4 -d 20  -u  -p 2'
+        t = threading.Thread(target=thread_start_remote, args=(args, hosts[i], cmdline, remote_returns_list_list[i]))
+        threads.append(t)
+    for i in range(num_hosts):
+        threads[i].start()
+    for i in range(len(threads)):
+        threads[i].join()
+    
+    for i in range(len(threads)):
+        print(f'***{remote_returns_list_list[i]}')
+
+#def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
+def start_procs (args):
     set_start_method('fork')
     procs = []
     queues = []
     stats = []
-    for p in range(processes):
+    for p in range(args.processes):
         qobj = Queue()
         queues.append(qobj)
-        proc = Process(target=main, args=(threads, inputfile, rangefile, soak, duration, session, user, qobj))
+        proc = Process(target=main, args=(
+            args.threads, args.inputfile, args.rangefile, 
+            args.soak, args.duration, args.session, args.user, qobj))
         procs.append(proc)
         proc.start()
  
     for q in queues:
         stats.append(q.get())
 
-    total_users = processes * threads
+    total_users = args.processes * args.threads
     total_results = 0
     elapsed_sum = 0
     user_rate_sum = 0
@@ -357,11 +403,15 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--duration', type=int, default=5, help="Duration of test")
     parser.add_argument('-t', '--threads', type=int, default=10, help="Number of simultaneous threads")
     parser.add_argument('-i', '--inputfile', type=str, default=None, help="File of addresses")
-    parser.add_argument('-r', '--rangefile', type=str, default=None, help="File of address ranges")
+    parser.add_argument('-a', '--rangefile', type=str, default=None, help="File of address ranges")
     parser.add_argument('-s', '--soak', type=int, default=None, help="Desired request rate")
     parser.add_argument('-e', '--session', action='store_true', help="Use persistent session in a thread?")
     parser.add_argument('-u', '--user',  action='store_true', help="Simulate user typing?")
     parser.add_argument('-p', '--processes', type=int, default=1, help="Number of processes to run")
+    parser.add_argument('-r', '--remote', action='store_true', help="I am a remotely controlled instance")
+    parser.add_argument('-n', '--nodes', type=str, default='', help="File with list of <user>@<host> for remote instances")
+    parser.add_argument('-o', '--output', type=str, default='text', help="Output format (text,json")
+
 
 
     args = parser.parse_args()
@@ -377,9 +427,14 @@ if __name__ == "__main__":
         print(f'Starting {args.processes} process(es)...')
         print(f'Starting {args.threads} per process...')
         
-
-
-    start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
-#   main(args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
+#   remote_list = parse_host_file(args.nodes)
+    if args.nodes:
+        print(args.nodes)
+        t = threading.Thread(target=start_remote_instances, args=(args.nodes, ''))
+        t.start()
+#       start_remote_instances(args)
+        
+    start_procs(args)
+#   start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
 
 
