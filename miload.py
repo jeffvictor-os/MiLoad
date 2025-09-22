@@ -375,6 +375,7 @@ def start_procs (args, empty):
 
     elapsed   = elapsed_sum / len(stats)
 
+    print(f'Remote? {args.remote}.')
     if args.remote:
         print(f'Total user rate: {int(user_rate_sum)} per minute')
     else:
