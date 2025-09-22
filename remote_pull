@@ -1,0 +1,3 @@
+ssh jeff@jeff.mivoter.org "cd MiLoad; /usr/bin/git pull"
+ssh jeff@jeff2.mivoter.org "cd MiLoad; /usr/bin/git pull"
+ssh jeff@jeff3.mivoter.org "cd MiLoad; /usr/bin/git pull"

@@ -317,7 +317,8 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     qobj.put(stats_dict)
 
 def thread_start_remote(args, host, cmdline, return_val):
-    print(f'Starting on {host}: {cmdline}')
+    ''' Create a new process that uses ssh to start another 
+        load instance on a remote computer. '''
     cmd_tokens = cmdline.split()
     stdout_err = subprocess.run(cmd_tokens, capture_output=True, text=True)
     stdout = stdout_err.stdout
@@ -373,11 +374,14 @@ def start_procs (args, empty):
 
     elapsed   = elapsed_sum / len(stats)
 
-    print('=========\nOverall Statistics: ')
-    print(f'Simultaneous users:   {int(total_users)}')
-    print(f'Total results:   {int(total_results)}')
-    print(f'Elapsed time:    {int(elapsed)}')
-    print(f'Total user rate: {int(user_rate_sum)} per minute')
+    if args.remote:
+        print(f'Total user rate: {int(user_rate_sum)} per minute')
+    else:
+        print('=========\nOverall Statistics: ')
+        print(f'Simultaneous users:   {int(total_users)}')
+        print(f'Total results:   {int(total_results)}')
+        print(f'Elapsed time:    {int(elapsed)}')
+        print(f'Total user rate: {int(user_rate_sum)} per minute')
 
     for p in procs:
         p.join()
