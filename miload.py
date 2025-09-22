@@ -86,13 +86,15 @@ def issue_request(session, url, result, i):
         try:
             response = requests.get(url, headers=headers)
         except requests.exceptions.ConnectionError:
-            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
-            return
+#            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
+             print ('A', flush=True, end='')
+             return
     else:
         try:
             response = session.get(url)
         except requests.exceptions.ConnectionError:
-            print ('====== CONNECTION REQUEST ABORTED : SESSION =====', flush=True)
+#           Report CONNECTION REQUEST ABORTED : SESSION =====', flush=True)
+            print ('As', flush=True, end='')
             return
 
     end = time.time()
@@ -243,8 +245,6 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
     for r in range(num_threads):
         user_count_list_list.append([])
     delay = num_threads/rate_goal - 0.04
-#   if DEBUG:
-#       print(f'Delay: {delay:0.3f}')
 
     threads = []
     if user is False:
@@ -252,7 +252,6 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
             t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
             threads.append(t)
     else:
-#       delay = 0.1 * delay
         print(f'Changed delay to {delay:0.2f}')
         for i in range(int(num_threads)):
             t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], user_count_list_list[i], duration))
@@ -287,8 +286,6 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     elif inputfile is not None:
         # Use the inputfile as a list of addresses
         urls = read_static_addrs(inputfile)
- #      if DEBUG:
- #          print(f'Reading {len(urls)} addresses took {time.time()-getaddr_start:0.6f} seconds.')
     else:
         # rangefile is a list of street number ranges.
         # Use them to generate valid addreses.
@@ -308,15 +305,10 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
     results_df_sort = results_df.sort_values(by='start')
     results_df_sort.to_csv('results.csv')
 
-#   print('\n==== Statistics ====')
     avg_time = results_df['elapsed'].mean()
     user_rate = total_users/all_elapsed*60
     print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
     
-#   print(f'Inputs: {method} method, rate goal={rate_goal}, threads={num_threads}')
-#   print(f'{len(results_df)} requests, average: {avg_time:0.3f} sec, SD={results_df["elapsed"].std():0.3f}, Total elapsed time={all_elapsed:0.2f}, overall rate={len(results)/all_elapsed:0.2f}')
-#   print(f'Match distribution: min: {results_df["num_matches"].min()}, max: {results_df["num_matches"].max()}, avg: {results_df["num_matches"].mean():0.2f}\n')
- 
     # Send stats to spawner
     stats_dict = { 'result_count': len(results_df),
                    'elapsed': all_elapsed,
@@ -330,21 +322,20 @@ def thread_start_remote(args, host, cmdline, return_val):
     stdout_err = subprocess.run(cmd_tokens, capture_output=True, text=True)
     stdout = stdout_err.stdout
     return_val.append(host+':::'+stdout)
-#   print(f'===\n{host}:\n' + stdout + '\n===\n')
 
-def start_remote_instances(nodes, remote_returns_list_list):
+def start_remote_instances(args, remote_returns_list_list):
     ''' Use ssh to start one instance on another computer, potentially with 
         multiple processes and/or threads. It will report its results in 
         JSON format. '''
 
-    # Prepare storage for output from remote instances.
-#   remote_returns_list_list = []
-#   for r in range(num_hosts):
-#       remote_returns_list_list.append([])
+    with open(args.nodes, 'r') as file:
+        hosts = [line.strip() for line in file]
+    num_hosts = len(hosts)
 
+    # Prepare storage for output from remote instances.
     threads = []
     for i in range(num_hosts):
-        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s 20 -t 4 -d 10  -u  -p 2'
+        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s {args.soak} -t {args.threads} -d {args.duration}  -u  -p {args.processes}'
         t = threading.Thread(target=thread_start_remote, args=(args, hosts[i], cmdline, remote_returns_list_list[i]))
         threads.append(t)
     for i in range(num_hosts):
@@ -352,11 +343,8 @@ def start_remote_instances(nodes, remote_returns_list_list):
     for i in range(len(threads)):
         threads[i].join()
     
-    for i in range(len(threads)):
-        print(f'***{remote_returns_list_list[i]}')
     return remote_returns_list_list
 
-#def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
 def start_procs (args, empty):
     set_start_method('fork')
     procs = []
@@ -379,7 +367,6 @@ def start_procs (args, empty):
     elapsed_sum = 0
     user_rate_sum = 0
     for s in stats:
-#       print(s)
         total_results += s['result_count']
         elapsed_sum   += s['elapsed']
         user_rate_sum += s['user_rate']
@@ -424,7 +411,7 @@ if __name__ == "__main__":
         else:
             print('Using flood method')
         print(f'Starting {args.processes} process(es)...')
-        print(f'Starting {args.threads} per process...')
+        print(f'Starting {args.threads} threads per process...')
         
     # Prepare storage for output from remote instances.
     with open(args.nodes, 'r') as file:
@@ -437,10 +424,9 @@ if __name__ == "__main__":
     thr_list = []
     if args.nodes:
         print(args.nodes)
-        t = threading.Thread(target=start_remote_instances, args=(args.nodes, remote_returns_list_list))
+        t = threading.Thread(target=start_remote_instances, args=(args, remote_returns_list_list))
         thr_list.append(t)
         t.start()
-#       start_remote_instances(args)
         
     t = threading.Thread(target=start_procs, args=(args, ''))
     thr_list.append(t)
@@ -452,6 +438,5 @@ if __name__ == "__main__":
         for i in range(num_hosts):
             print(f'***{remote_returns_list_list[i]}')
 
-#   start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
 
 
