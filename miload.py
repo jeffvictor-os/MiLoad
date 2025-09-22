@@ -375,7 +375,6 @@ def start_procs (args, empty):
 
     elapsed   = elapsed_sum / len(stats)
 
-    print(f'Remote? {args.remote}.')
     if args.remote:
         print(f'Total user rate: {int(user_rate_sum)} per minute')
     else:
@@ -420,12 +419,13 @@ if __name__ == "__main__":
         print(f'Starting {args.threads} threads per process...')
         
     # Prepare storage for output from remote instances.
-    with open(args.nodes, 'r') as file:
-        hosts = [line.strip() for line in file]
-    num_hosts = len(hosts)
-    remote_returns_list_list = []
-    for r in range(num_hosts):
-        remote_returns_list_list.append([])
+    if not args.remote:
+        with open(args.nodes, 'r') as file:
+            hosts = [line.strip() for line in file]
+        num_hosts = len(hosts)
+        remote_returns_list_list = []
+        for r in range(num_hosts):
+            remote_returns_list_list.append([])
 
     thr_list = []
     if args.nodes:
