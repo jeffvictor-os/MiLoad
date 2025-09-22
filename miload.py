@@ -27,6 +27,7 @@
     v0.26: Multiprocessing, Phase 2: consolidate output from proc's
     v0.27: Usability Phase 1: Use ssh to execute instances on other systems
 ToDo
+    v0.28: Forward cmdline options to remote systems
     v0.xx: Usability Phase 2: Aggregate output from remote instances
     v0.xx: Count connection aborts per minute
     v0.xx: Option to run on server: remove network latency factor from delay calculation
@@ -331,22 +332,19 @@ def thread_start_remote(args, host, cmdline, return_val):
     return_val.append(host+':::'+stdout)
 #   print(f'===\n{host}:\n' + stdout + '\n===\n')
 
-def start_remote_instances(nodes, empty):
+def start_remote_instances(nodes, remote_returns_list_list):
     ''' Use ssh to start one instance on another computer, potentially with 
         multiple processes and/or threads. It will report its results in 
         JSON format. '''
-    with open(nodes, 'r') as file:
-        hosts = [line.strip() for line in file]
-    num_hosts = len(hosts)
 
     # Prepare storage for output from remote instances.
-    remote_returns_list_list = []
-    for r in range(num_hosts):
-        remote_returns_list_list.append([])
+#   remote_returns_list_list = []
+#   for r in range(num_hosts):
+#       remote_returns_list_list.append([])
 
     threads = []
     for i in range(num_hosts):
-        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s 30 -t 4 -d 20  -u  -p 2'
+        cmdline = f'ssh {hosts[i]} /usr/bin/python3 MiLoad/miload.py -i MiLoad/addresses -s 20 -t 4 -d 10  -u  -p 2'
         t = threading.Thread(target=thread_start_remote, args=(args, hosts[i], cmdline, remote_returns_list_list[i]))
         threads.append(t)
     for i in range(num_hosts):
@@ -356,9 +354,10 @@ def start_remote_instances(nodes, empty):
     
     for i in range(len(threads)):
         print(f'***{remote_returns_list_list[i]}')
+    return remote_returns_list_list
 
 #def start_procs (processes, threads, inputfile, rangefile, soak, duration, session, user):
-def start_procs (args):
+def start_procs (args, empty):
     set_start_method('fork')
     procs = []
     queues = []
@@ -427,14 +426,32 @@ if __name__ == "__main__":
         print(f'Starting {args.processes} process(es)...')
         print(f'Starting {args.threads} per process...')
         
-#   remote_list = parse_host_file(args.nodes)
+    # Prepare storage for output from remote instances.
+    with open(args.nodes, 'r') as file:
+        hosts = [line.strip() for line in file]
+    num_hosts = len(hosts)
+    remote_returns_list_list = []
+    for r in range(num_hosts):
+        remote_returns_list_list.append([])
+
+    thr_list = []
     if args.nodes:
         print(args.nodes)
-        t = threading.Thread(target=start_remote_instances, args=(args.nodes, ''))
+        t = threading.Thread(target=start_remote_instances, args=(args.nodes, remote_returns_list_list))
+        thr_list.append(t)
         t.start()
 #       start_remote_instances(args)
         
-    start_procs(args)
+    t = threading.Thread(target=start_procs, args=(args, ''))
+    thr_list.append(t)
+    t.start()
+    for i in range(2):
+        thr_list[i].join()
+
+    if args.nodes:
+        for i in range(num_hosts):
+            print(f'***{remote_returns_list_list[i]}')
+
 #   start_procs(args.processes, args.threads, args.inputfile, args.rangefile, args.soak, args.duration, args.session, args.user)
 
 
