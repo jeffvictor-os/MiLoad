@@ -42,6 +42,7 @@ Later
 '''
 import argparse
 import itertools
+import json
 from math import floor as floor
 from multiprocessing import Process, Queue, set_start_method
 import pandas as pd
@@ -178,7 +179,7 @@ def one_user(url, results):
     match = re.search(patt, url)
     num_str = f"num={match.group('num')}"
     street_str = f"street={match.group('street')}"
-    print('.', end='', flush=True)
+    # print('.', end='', flush=True)
     street_len = len(match.group('street'))
     
     i = None
@@ -294,7 +295,8 @@ def main(remote, num_threads, inputfile, rangefile, rate_goal, duration, use_ses
     if rate_goal is not None:
         # method = 'Soak'
         delay = num_threads/rate_goal - 0.04
-        print(f'Set delay to {delay:0.2f}')
+        if not remote:
+            print(f'Set delay to {delay:0.2f}')
         results, total_users, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session, user)
     else:
         # method = 'Flood'
@@ -306,7 +308,10 @@ def main(remote, num_threads, inputfile, rangefile, rate_goal, duration, use_ses
 
     avg_time = results_df['elapsed'].mean()
     user_rate = total_users/all_elapsed*60
-    if not remote:
+    if remote:
+        remote_output = { 'user_rate': user_rate }
+        print(json.dumps(remote_output))
+    else:
         print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
     
     # Send stats to spawner
