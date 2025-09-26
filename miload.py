@@ -252,11 +252,9 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
             t = threading.Thread(target=one_tub, args=(urls, delay, results_list_list[i], duration, use_session))
             threads.append(t)
     else:
-        print(f'Changed delay to {delay:0.2f}')
         for i in range(int(num_threads)):
             t = threading.Thread(target=many_users, args=(urls, delay, results_list_list[i], user_count_list_list[i], duration))
             threads.append(t)
-        
 
     all_start = time.time()
     for i in range(len(threads)):
@@ -275,10 +273,9 @@ def soak(num_threads, urls, rate_goal, duration, use_session, user):
         total_users += sum(u_count)
     return results, total_users, all_elapsed
 
-def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, user, qobj):
+def main(remote, num_threads, inputfile, rangefile, rate_goal, duration, use_session, user, qobj):
     ''' main: retrieve optional address list, create threads, run all '''
     # Get addresses
-    getaddr_start = time.time()
     total_users = 0
     if inputfile is None and rangefile is None:
         # Use the URLs defined above
@@ -295,10 +292,12 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
         urls = range_df['url'].tolist()
 
     if rate_goal is not None:
-        method = 'Soak'
+        # method = 'Soak'
+        delay = num_threads/rate_goal - 0.04
+        print(f'Set delay to {delay:0.2f}')
         results, total_users, all_elapsed = soak(num_threads, urls, rate_goal, duration, use_session, user)
     else:
-        method = 'Flood'
+        # method = 'Flood'
         results, all_elapsed = flood(num_threads, urls)
 
     results_df = pd.DataFrame(results)
@@ -307,7 +306,8 @@ def main(num_threads, inputfile, rangefile, rate_goal, duration, use_session, us
 
     avg_time = results_df['elapsed'].mean()
     user_rate = total_users/all_elapsed*60
-    print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
+    if not remote:
+        print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
     
     # Send stats to spawner
     stats_dict = { 'result_count': len(results_df),
@@ -355,7 +355,7 @@ def start_procs (args, empty):
     for p in range(args.processes):
         qobj = Queue()
         queues.append(qobj)
-        proc = Process(target=main, args=(
+        proc = Process(target=main, args=(args.remote,
             args.threads, args.inputfile, args.rangefile, 
             args.soak, args.duration, args.session, args.user, qobj))
         procs.append(proc)
@@ -406,7 +406,7 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-    if DEBUG:
+    if DEBUG and not args.remote:
         if args.soak is not None:
             print(f'Using Soak Method with desired rate goal: {args.soak}')
             if args.user:
