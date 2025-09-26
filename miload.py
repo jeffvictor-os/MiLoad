@@ -89,14 +89,14 @@ def issue_request(session, url, result, i):
             response = requests.get(url, headers=headers)
         except requests.exceptions.ConnectionError:
 #            print ('============ CONNECTION REQUEST ABORTED ============', flush=True)
-             print ('A', flush=True, end='')
+#            print ('A', flush=True, end='')
              return
     else:
         try:
             response = session.get(url)
         except requests.exceptions.ConnectionError:
 #           Report CONNECTION REQUEST ABORTED : SESSION =====', flush=True)
-            print ('As', flush=True, end='')
+#           print ('As', flush=True, end='')
             return
 
     end = time.time()
