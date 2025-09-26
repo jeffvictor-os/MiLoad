@@ -49,6 +49,7 @@ import pandas as pd
 import random
 import re
 import requests
+import socket
 import subprocess
 import sys
 import threading
@@ -324,7 +325,7 @@ def thread_start_remote(args, host, cmdline, return_val):
     cmd_tokens = cmdline.split()
     stdout_err = subprocess.run(cmd_tokens, capture_output=True, text=True)
     stdout = stdout_err.stdout
-    return_val.append(host+':::'+stdout)
+    return_val.append(stdout)
 
 def start_remote_instances(args, remote_returns_list_list):
     ''' Use ssh to start one instance on another computer, potentially with 
@@ -378,7 +379,8 @@ def start_procs (args, empty):
     elapsed   = elapsed_sum / len(stats)
 
     if args.remote:
-        remote_output = { 'user_rate': user_rate_sum }
+        remote_output = { 'hostname' : socket.gethostname(),
+                          'user_rate': user_rate_sum }
         print(json.dumps(remote_output))
 
     else:
