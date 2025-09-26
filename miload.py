@@ -308,10 +308,7 @@ def main(remote, num_threads, inputfile, rangefile, rate_goal, duration, use_ses
 
     avg_time = results_df['elapsed'].mean()
     user_rate = total_users/all_elapsed*60
-    if remote:
-        remote_output = { 'user_rate': user_rate }
-        print(json.dumps(remote_output))
-    else:
+    if not remote:
         print(f'Total users: {total_users}, {user_rate:0.0f} users per minute')
     
     # Send stats to spawner
@@ -381,7 +378,9 @@ def start_procs (args, empty):
     elapsed   = elapsed_sum / len(stats)
 
     if args.remote:
-        print(f'Total user rate: {int(user_rate_sum)} per minute')
+        remote_output = { 'user_rate': user_rate_sum }
+        print(json.dumps(remote_output))
+
     else:
         print('=========\nOverall Statistics: ')
         print(f'Simultaneous users:   {int(total_users)}')
