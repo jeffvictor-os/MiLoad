@@ -388,7 +388,7 @@ def start_procs (args, empty):
         print(f'Simultaneous users:   {int(total_users)}')
         print(f'Total results:   {int(total_results)}')
         print(f'Elapsed time:    {int(elapsed)}')
-        print(f'Total user rate: {int(user_rate_sum)} per minute')
+        print(f'Total local user rate: {int(user_rate_sum)} per minute')
 
     for p in procs:
         p.join()
@@ -439,16 +439,24 @@ if __name__ == "__main__":
         t = threading.Thread(target=start_remote_instances, args=(args, remote_returns_list_list))
         thr_list.append(t)
         t.start()
-        
+    
     t = threading.Thread(target=start_procs, args=(args, ''))
     thr_list.append(t)
     t.start()
     for i in range(2):
         thr_list[i].join()
 
+#   my_total_rate = 
+
     if args.nodes:
+        total_rate = 0       
         for i in range(num_hosts):
-            print(f'***{remote_returns_list_list[i]}')
+            remote_output_dict = json.loads(remote_returns_list_list[i][0].strip())
+#           print('1', remote_output_dict['user_rate'])
+#           for k,v in remote_output_dict.items():
+#               print(k, ":", v)
+            total_rate += remote_output_dict['user_rate']
+        print(f'Total remote rates: {int(total_rate)}')
 
 
 
